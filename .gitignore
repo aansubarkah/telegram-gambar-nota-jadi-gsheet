@@ -2,3 +2,10 @@
 *.csv
 *.json
 credentials.py
+credentials.json
+*.lock
+*.jpg
+*.jpeg
+*.pdf
+*.toml
+*.pyc
