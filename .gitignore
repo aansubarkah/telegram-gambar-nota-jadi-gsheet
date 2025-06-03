@@ -1,0 +1,4 @@
+*.code-workspace
+*.csv
+*.json
+credentials.py
