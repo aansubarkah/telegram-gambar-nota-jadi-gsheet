@@ -271,7 +271,7 @@ class TelegramGoogleSheetsBot:
             unix_timestamp = int(time.time())  # Unix timestamp for filename
 
             # Prepare data for Google Sheets
-            row_data = [
+            '''row_data = [
                 unix_timestamp,
                 str(user.id),
                 user.username or user.first_name or "Unknown",
@@ -279,13 +279,17 @@ class TelegramGoogleSheetsBot:
             ]
 
             # Append to Google Sheets
-            self.sheet.append_row(row_data)
+            self.sheet.append_row(row_data)'''
 
             # Send confirmation
             await update.message.reply_text(
+                f"Hi, please upload a photo or document containing your invoice/receipt.\n"
+                f"The data will be extracted and saved to Google Sheets https://bit.ly/invoice-to-gsheets.\n\n"
+            )
+            '''await update.message.reply_text(
                 f"✅ Message saved to Google Sheets!\n"
                 f"📝 Text: {message_text[:50]}{'...' if len(message_text) > 50 else ''}"
-            )
+            )'''
 
             logger.info(f"Saved message from {user.username}: {message_text}")
 
@@ -373,7 +377,8 @@ class TelegramGoogleSheetsBot:
                     f"📝 Items processed: {items_processed}\n"
                     f"🏪 Seller: {invoice_data[0].get('penjual', 'N/A')}\n"
                     f"💰 Total (all items): {sum(inv.get('subtotal', 0) for inv in invoice_data):,.2f}\n"
-                    f"⏰ Date: {invoice_data[0].get('waktu', 'N/A')}"
+                    f"⏰ Date: {invoice_data[0].get('waktu', 'N/A')}\n"
+                    f"See the full data in Google Sheets: https://bit.ly/invoice-to-gsheets\n\n"
                 )
 
             else:

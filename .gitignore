@@ -3,6 +3,7 @@
 *.json
 credentials.py
 credentials.json
+credentials_vps.json
 *.lock
 *.jpg
 *.jpeg
