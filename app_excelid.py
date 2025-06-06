@@ -6,6 +6,7 @@ import os
 from typing import Optional
 from google import genai
 from google.genai import types
+from excelid_credentials import GEMINI_API_KEY, TELEGRAM_BOT_TOKEN
 
 # Configure logging
 logging.basicConfig(
@@ -226,8 +227,6 @@ Try asking me something specific, and I'll do my best to help!"""
 
 def main():
     # Configuration
-    TELEGRAM_BOT_TOKEN = '7268324383:AAEB7hYkWCB-TxYGwFhuZ4_Eqo5WjlDuDN0'
-    GEMINI_API_KEY = 'AIzaSyDBhCAMcISchXzLzkyWN3uI_ZvNKBDEP6Q'
     
     if TELEGRAM_BOT_TOKEN == 'YOUR_TELEGRAM_BOT_TOKEN_HERE':
         print("❌ Please set your Telegram bot token!")

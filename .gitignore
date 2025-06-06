@@ -4,6 +4,7 @@
 credentials.py
 credentials.json
 credentials_vps.json
+excelid_credentials.py
 *.lock
 *.jpg
 *.jpeg
