@@ -34,7 +34,7 @@ class QuestionAnswerBot:
 
     def escape_markdown(self, text: str) -> str:
         """Escape special characters for MarkdownV2"""
-        special_chars = ['[', ']', '(', ')', '+', '-', '=', '|', '{', '}', '.', '!']
+        special_chars = ['#', '[', ']', '(', ')', '+', '-', '=', '|', '{', '}', '.', '!']
         #special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
         for char in special_chars:
             text = text.replace(char, f"\\{char}")
