@@ -39,7 +39,26 @@ class QuestionAnswerBot:
         for char in special_chars:
             text = text.replace(char, f"\\{char}")
         return text
-            
+
+    def get_current_time(self) -> str:
+        """Get current time in Indonesia format"""
+        from datetime import datetime
+        from pytz import timezone
+    
+        # Set timezone to Indonesia/Jakarta
+        jakarta_tz = timezone('Asia/Jakarta')
+        current_time = datetime.now(jakarta_tz)
+        
+        # Format time in Indonesian style
+        weekdays = {
+            0: 'Senin', 1: 'Selasa', 2: 'Rabu', 3: 'Kamis',
+            4: 'Jumat', 5: 'Sabtu', 6: 'Minggu'
+        }
+        
+        day_name = weekdays[current_time.weekday()]
+        formatted_time = current_time.strftime(f"{day_name}, %d-%m-%Y %H:%M:%S WIB")
+        
+        return formatted_time 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command"""
         await update.message.reply_text(
@@ -167,6 +186,10 @@ In groups, mention me (@botname) to get my attention!
         if any(word in question_lower for word in ['hello', 'hi', 'hey', 'greetings']):
             return "Hello! How can I help you today? 😊"
         
+        elif any(word in question_lower for word in ['time', 'date', 'today', 'waktu', 'tanggal', 'hari ini']):
+            current_time = self.get_current_time()
+            return f"🕐 Waktu saat ini: {current_time}"
+            
         elif any(word in question_lower for word in ['python', 'programming', 'code']):
             return """🐍 Python is a high-level programming language known for its simplicity and readability. 
 It's widely used for:
