@@ -186,10 +186,10 @@ In groups, mention me (@botname) to get my attention!
         if any(word in question_lower for word in ['hello', 'hi', 'hey', 'greetings']):
             return "Hello! How can I help you today? 😊"
         
-        elif any(word in question_lower for word in ['time', 'date', 'today', 'waktu', 'tanggal', 'hari ini']):
+        elif any(word in question_lower for word in ['time', 'date', 'today', 'waktu', 'jam', 'sekarang', 'tanggal', 'hari ini']):
             current_time = self.get_current_time()
             return f"🕐 Waktu saat ini: {current_time}"
-            
+
         elif any(word in question_lower for word in ['python', 'programming', 'code']):
             return """🐍 Python is a high-level programming language known for its simplicity and readability. 
 It's widely used for:
