@@ -4,3 +4,4 @@
 - basangdata@gmail.com
 - telegram-bot-vps@gen-lang-client-0172843846.iam.gserviceaccount.com
 - telegram-gsheets-gemini@gen-lang-client-0172843846.iam.gserviceaccount.com
+3. Check your id using /checkid

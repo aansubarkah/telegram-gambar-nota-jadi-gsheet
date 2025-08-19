@@ -314,16 +314,19 @@ class TelegramGoogleSheetsBot:
             user = update.effective_user
             unix_timestamp = int(time.time())
 
-            # Check if user has a specific spreadsheet ID
+            # Determine the spreadsheet ID to use and generate the URL
             user_spreadsheet_id = self.IDS_SPREADSHEETS.get(str(user.id))
-            
-            # If user has a specific spreadsheet ID, use it; otherwise, use the default one
             if user_spreadsheet_id:
+                target_spreadsheet_id = user_spreadsheet_id
                 print(f"Using custom spreadsheet ID for user {user.id}: {user_spreadsheet_id}")
-                self.setup_google_sheets(GOOGLE_CREDENTIALS_FILE, user_spreadsheet_id)
             else:
+                target_spreadsheet_id = self.default_spreadsheet_id
                 print(f"Using default spreadsheet ID for user {user.id}: {self.default_spreadsheet_id}")
-                self.setup_google_sheets(GOOGLE_CREDENTIALS_FILE, self.default_spreadsheet_id)
+            
+            spreadsheet_url = f"https://docs.google.com/spreadsheets/d/{target_spreadsheet_id}"
+
+            # Setup Google Sheets client with the determined spreadsheet ID
+            self.setup_google_sheets(GOOGLE_CREDENTIALS_FILE, target_spreadsheet_id)
 
             # Only process images, not PDFs
             if update.message.photo:
@@ -390,7 +393,7 @@ class TelegramGoogleSheetsBot:
                     self.sheet.append_row(row_data)
                     items_processed += 1
 
-                # Send confirmation with summary of all processed items
+                # Send confirmation with summary of all processed items and the correct spreadsheet URL
                 await update.message.reply_text(
                     f"✅ Data extracted and saved successfully!\n\n"
                     f"📊 Summary:\n"
@@ -398,7 +401,7 @@ class TelegramGoogleSheetsBot:
                     f"🏪 Seller: {invoice_data[0].get('penjual', 'N/A')}\n"
                     f"💰 Total (all items): {sum(inv.get('subtotal', 0) for inv in invoice_data):,.2f}\n"
                     f"⏰ Date: {invoice_data[0].get('waktu', 'N/A')}\n"
-                    f"See the full data in Google Sheets: https://bit.ly/invoice-to-gsheets\n\n"
+                    f"See the full data in Google Sheets: {spreadsheet_url}\n\n"
                 )
 
             else:
