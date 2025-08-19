@@ -314,16 +314,18 @@ class TelegramGoogleSheetsBot:
             user = update.effective_user
             unix_timestamp = int(time.time())
 
+            spreadsheet_url = 'https://bit.ly/invoice-to-gsheets'
             # Determine the spreadsheet ID to use and generate the URL
             user_spreadsheet_id = self.IDS_SPREADSHEETS.get(str(user.id))
             if user_spreadsheet_id:
                 target_spreadsheet_id = user_spreadsheet_id
                 print(f"Using custom spreadsheet ID for user {user.id}: {user_spreadsheet_id}")
+                spreadsheet_url = f"https://docs.google.com/spreadsheets/d/{target_spreadsheet_id}"
             else:
                 target_spreadsheet_id = self.default_spreadsheet_id
                 print(f"Using default spreadsheet ID for user {user.id}: {self.default_spreadsheet_id}")
             
-            spreadsheet_url = f"https://docs.google.com/spreadsheets/d/{target_spreadsheet_id}"
+            #spreadsheet_url = f"https://docs.google.com/spreadsheets/d/{target_spreadsheet_id}"
 
             # Setup Google Sheets client with the determined spreadsheet ID
             self.setup_google_sheets(GOOGLE_CREDENTIALS_FILE, target_spreadsheet_id)
