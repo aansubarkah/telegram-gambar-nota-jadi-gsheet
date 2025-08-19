@@ -122,18 +122,27 @@ class TelegramGoogleSheetsBot:
 
     def __init__(self, telegram_token, google_credentials_file, spreadsheet_id):
         self.telegram_token = telegram_token
-        self.spreadsheet_id = spreadsheet_id
+        self.default_spreadsheet_id = spreadsheet_id  # Store the default spreadsheet ID
         self.upload_dir = 'uploads'
+        # Define user-specific spreadsheet IDs
+        self.IDS_SPREADSHEETS = {
+            '33410730': '1OwBzgxICijfhhZ2TttbouKhdSlDLFyHYixwd7Iwo-UU'
+            # Add more user IDs and their corresponding spreadsheet IDs here
+            # Example: '123456789': 'spreadsheet_id_for_user_123456789'
+        }
 
-        # Initialize Google Sheets client
-        self.setup_google_sheets(google_credentials_file)
+        # Initialize Google Sheets client with the default spreadsheet
+        self.setup_google_sheets(google_credentials_file, spreadsheet_id)
 
         if not os.path.exists(self.upload_dir):
             os.makedirs(self.upload_dir)
             logger.info(f"Created upload directory: {self.upload_dir}")
 
-    def setup_google_sheets(self, credentials_file):
+    def setup_google_sheets(self, credentials_file, spreadsheet_id=None):
         """Setup Google Sheets API connection"""
+        # Use the provided spreadsheet_id or fall back to the default one
+        target_spreadsheet_id = spreadsheet_id if spreadsheet_id else self.default_spreadsheet_id
+        
         try:
             print(f"Attempting to load credentials from: {credentials_file}")
 
@@ -155,8 +164,8 @@ class TelegramGoogleSheetsBot:
             self.gc = gspread.authorize(creds)
 
             # Open the spreadsheet
-            print(f"Opening spreadsheet with ID: {self.spreadsheet_id}")
-            self.sheet = self.gc.open_by_key(self.spreadsheet_id).sheet1
+            print(f"Opening spreadsheet with ID: {target_spreadsheet_id}")
+            self.sheet = self.gc.open_by_key(target_spreadsheet_id).sheet1
 
             # Define expected headers
             expected_headers = [
@@ -199,7 +208,7 @@ class TelegramGoogleSheetsBot:
             print(f"❌ Credentials file error: {e}")
             raise
         except gspread.exceptions.SpreadsheetNotFound:
-            print(f"❌ Spreadsheet not found. Check your spreadsheet ID: {self.spreadsheet_id}")
+            print(f"❌ Spreadsheet not found. Check your spreadsheet ID: {target_spreadsheet_id}")
             raise
         except gspread.exceptions.APIError as e:
             print(f"❌ Google Sheets API error: {e}")
@@ -304,6 +313,17 @@ class TelegramGoogleSheetsBot:
         try:
             user = update.effective_user
             unix_timestamp = int(time.time())
+
+            # Check if user has a specific spreadsheet ID
+            user_spreadsheet_id = self.IDS_SPREADSHEETS.get(str(user.id))
+            
+            # If user has a specific spreadsheet ID, use it; otherwise, use the default one
+            if user_spreadsheet_id:
+                print(f"Using custom spreadsheet ID for user {user.id}: {user_spreadsheet_id}")
+                self.setup_google_sheets(GOOGLE_CREDENTIALS_FILE, user_spreadsheet_id)
+            else:
+                print(f"Using default spreadsheet ID for user {user.id}: {self.default_spreadsheet_id}")
+                self.setup_google_sheets(GOOGLE_CREDENTIALS_FILE, self.default_spreadsheet_id)
 
             # Only process images, not PDFs
             if update.message.photo:
