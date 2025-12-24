@@ -57,7 +57,7 @@ class TelegramInvoiceBotWithDB:
 
     @staticmethod
     async def convert_image_to_data(filepath, mime_type):
-        """Convert image to structured data using Chutes API with Qwen model"""
+        """Convert image to structured data using NanoGPT API with vision model"""
         try:
             with open(filepath, 'rb') as f:
                 image_bytes = f.read()
@@ -65,12 +65,12 @@ class TelegramInvoiceBotWithDB:
             # Convert image to base64
             base64_image = base64.b64encode(image_bytes).decode('utf-8')
 
-            # Prepare the prompt for Qwen model
+            # Prepare the prompt for vision model
             prompt = DEFAULT_PROMPT + "\n\nBerikan respons dalam format JSON array."
 
-            # Make API request to Chutes API
+            # Make API request to NanoGPT API
             headers = {
-                "Authorization": f"Bearer {config.CHUTES_API_KEY}",
+                "Authorization": f"Bearer {config.NANOGPT_API_KEY}",
                 "Content-Type": "application/json"
             }
 
@@ -98,7 +98,7 @@ class TelegramInvoiceBotWithDB:
             }
 
             response = requests.post(
-                config.CHUTES_API_URL,
+                config.NANOGPT_API_URL,
                 headers=headers,
                 json=payload,
                 timeout=config.AI_TIMEOUT
@@ -240,12 +240,12 @@ class TelegramInvoiceBotWithDB:
 
             pdf_document.close()
 
-            # Prepare prompt for Qwen model
+            # Prepare prompt for vision model
             prompt = DEFAULT_PROMPT + "\n\nBerikan respons dalam format JSON array."
 
-            # Make API request to Chutes API
+            # Make API request to NanoGPT API
             headers = {
-                "Authorization": f"Bearer {config.CHUTES_API_KEY}",
+                "Authorization": f"Bearer {config.NANOGPT_API_KEY}",
                 "Content-Type": "application/json"
             }
 
@@ -273,7 +273,7 @@ class TelegramInvoiceBotWithDB:
             }
 
             response = requests.post(
-                config.CHUTES_API_URL,
+                config.NANOGPT_API_URL,
                 headers=headers,
                 json=payload,
                 timeout=config.AI_TIMEOUT
@@ -336,14 +336,14 @@ class TelegramInvoiceBotWithDB:
 
     @staticmethod
     async def convert_text_to_data(text):
-        """Convert text message to structured data using Chutes API"""
+        """Convert text message to structured data using NanoGPT API"""
         try:
             # Prepare the prompt for text processing
             prompt = TEXT_PROMPT + f"\n\nTEKS PESAN:\n{text}"
 
-            # Make API request to Chutes API
+            # Make API request to NanoGPT API
             headers = {
-                "Authorization": f"Bearer {config.CHUTES_API_KEY}",
+                "Authorization": f"Bearer {config.NANOGPT_API_KEY}",
                 "Content-Type": "application/json"
             }
 
@@ -360,7 +360,7 @@ class TelegramInvoiceBotWithDB:
             }
 
             response = requests.post(
-                config.CHUTES_API_URL,
+                config.NANOGPT_API_URL,
                 headers=headers,
                 json=payload,
                 timeout=config.AI_TIMEOUT

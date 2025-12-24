@@ -15,6 +15,7 @@ from credentials import (
     GOOGLE_CREDENTIALS_FILE,
     SPREADSHEET_ID,
     CHUTES_API_KEY,
+    NANOGPT_API_KEY,
 )
 
 
@@ -58,12 +59,17 @@ class Config:
     ])
     
     # ============================================================
-    # AI API Settings
+    # AI API Settings (NanoGPT)
     # ============================================================
+    # Legacy Chutes API (kept for reference)
     CHUTES_API_KEY: str = CHUTES_API_KEY
     CHUTES_API_URL: str = "https://llm.chutes.ai/v1/chat/completions"
     
-    # Qwen3 VL 235B A22 Instruct model
+    # NanoGPT API (current provider)
+    NANOGPT_API_KEY: str = NANOGPT_API_KEY
+    NANOGPT_API_URL: str = "https://nano-gpt.com/api/v1/chat/completions"
+    
+    # Vision model for invoice extraction (gpt-4o has vision capability)
     AI_MODEL: str = "Qwen/Qwen3-VL-235B-A22B-Instruct"
     
     # Timeout settings (connect_timeout, read_timeout)
@@ -71,7 +77,7 @@ class Config:
     
     # AI generation settings
     AI_TEMPERATURE: float = 0.1
-    AI_MAX_TOKENS: int = 2000
+    AI_MAX_TOKENS: int = 10000
     
     # ============================================================
     # Database Settings

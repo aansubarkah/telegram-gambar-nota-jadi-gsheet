@@ -17,7 +17,8 @@ applyTo: '**'
 5. **PDF quota:** Each page counts as 1 request (changed Dec 24)
 6. **Custom prompts:** Each user can have custom AI prompt (stored in DB)
 7. **Custom sheet columns:** Each user can have custom column order (JSON)
-8. **AI Model:** Qwen3 VL 235B A22 Instruct (via Chutes API)
+8. **AI Provider:** NanoGPT (https://nano-gpt.com/api/v1/chat/completions)
+9. **AI Model:** gpt-4o (vision-capable)
 
 ## Tier System
 | Tier | Daily Limit |
