@@ -27,7 +27,7 @@ def convert_image_to_data(filename):
         image_bytes = f.read()
 
     response = client.models.generate_content(
-        model='gemini-2.0-flash-lite',
+        model='gemini-flash-latest',
         config=types.GenerateContentConfig(
             temperature=0.4,
             response_mime_type='application/json',
@@ -71,7 +71,7 @@ class TelegramGoogleSheetsBot:
 
             client = genai.Client(api_key=GEMINI_API_KEY)
             response = client.models.generate_content(
-                model='gemini-2.0-flash-lite',
+                model='gemini-flash-latest',
                 config=types.GenerateContentConfig(
                     temperature=0.4,
                     response_mime_type='application/json',
