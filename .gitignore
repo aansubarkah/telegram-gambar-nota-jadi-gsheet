@@ -11,3 +11,4 @@ excelid_credentials.py
 *.pdf
 *.toml
 *.pyc
+*.db

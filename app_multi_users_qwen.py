@@ -46,7 +46,7 @@ class TelegramGoogleSheetsBot:
             }
             
             payload = {
-                "model": "zai-org/GLM-4.6V",
+                "model": "Qwen/Qwen3-VL-235B-A22B-Instruct",
                 "messages": [
                     {
                         "role": "user",
@@ -197,7 +197,7 @@ class TelegramGoogleSheetsBot:
                 }
                 
                 payload = {
-                    "model": "zai-org/GLM-4.6V",
+                    "model": "Qwen/Qwen3-VL-235B-A22B-Instruct",
                     "messages": [
                         {
                             "role": "user",
@@ -339,7 +339,7 @@ class TelegramGoogleSheetsBot:
             }
             
             payload = {
-                "model": "zai-org/GLM-4.6V",
+                "model": "Qwen/Qwen3-VL-235B-A22B-Instruct",
                 "messages": [
                     {
                         "role": "user",

@@ -1,0 +1,21 @@
+# Telegram Invoice Bot - Requirements
+# Install with: uv pip install -r requirements-bot.txt
+
+# Telegram
+python-telegram-bot>=20.0
+
+# Google Sheets
+gspread>=5.0.0
+google-auth>=2.0.0
+
+# Database
+sqlalchemy>=2.0.0
+pytz>=2023.0
+
+# AI/Vision Processing
+requests>=2.28.0
+pillow>=9.0.0
+pymupdf>=1.22.0
+
+# Development (optional)
+# pytest>=7.0.0
