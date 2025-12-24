@@ -683,6 +683,7 @@ class TelegramInvoiceBotWithDB:
             "💰 *IDR 300.000/month*\n\n"
             "━━━━━━━━━━━━━━━━━━━━━\n\n"
             "💬 *Ready to upgrade?*\n"
+            "Please visit https://lynk.id/basangdata/0gloz311vmzk or\n"
             "Contact @basangdata to get started!\n\n"
             f"📎 Your Telegram ID: `{update.effective_user.id}`\n"
             "_(Share this ID when contacting us)_"
