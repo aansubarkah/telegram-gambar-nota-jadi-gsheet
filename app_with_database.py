@@ -645,7 +645,7 @@ class TelegramInvoiceBotWithDB:
     async def upgrade_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /upgrade command - show tier options"""
         upgrade_msg = (
-            "� *UPGRADE & BOOST YOUR PRODUCTIVITY!*\n\n"
+            "*UPGRADE & BOOST YOUR PRODUCTIVITY!*\n\n"
             "Stop wasting hours on manual data entry. Let AI do the work!\n\n"
             "━━━━━━━━━━━━━━━━━━━━━\n"
             "🆓 *FREE TIER*\n"
