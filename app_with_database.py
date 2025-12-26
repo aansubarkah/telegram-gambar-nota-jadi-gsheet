@@ -865,6 +865,41 @@ class TelegramInvoiceBotWithDB:
                 f"📈 Requests used: {requests_count}"
             )
 
+            # Get user's Google Sheet and write data there too
+            with get_db() as db:
+                user = get_user_by_telegram_id(db, user_tg.id)
+                target_spreadsheet_id = get_user_spreadsheet_id(
+                    db,
+                    user_tg.id,
+                    self.default_spreadsheet_id
+                )
+                if user and user.google_sheet_id:
+                    spreadsheet_url = f"https://docs.google.com/spreadsheets/d/{target_spreadsheet_id}"
+                else:
+                    spreadsheet_url = 'https://bit.ly/invoice-to-gsheets'
+
+            # Setup Google Sheets and write bulk data
+            self.setup_google_sheets(self.google_credentials_file, target_spreadsheet_id)
+            
+            # Read CSV and write to Google Sheets in BATCH (avoids rate limit)
+            rows_to_write = []
+            with open(csv_path, 'r', newline='', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                next(reader)  # Skip header row
+                for row in reader:
+                    rows_to_write.append(row)
+            
+            # Batch append all rows at once (single API call)
+            if rows_to_write:
+                self.sheet.append_rows(rows_to_write, value_input_option='USER_ENTERED')
+            rows_written = len(rows_to_write)
+
+            await update.message.reply_text(
+                f"✅ Data written to Google Sheets!\n"
+                f"📝 Rows added: {rows_written}\n"
+                f"📄 Sheet: {spreadsheet_url}"
+            )
+
             # Convert CSV to Excel
             excel_path = self.convert_csv_to_excel(csv_path)
 
@@ -901,9 +936,10 @@ class TelegramInvoiceBotWithDB:
                 f"📊 Summary:\n"
                 f"• Total items: {items_count}\n"
                 f"• Quota used: {requests_count}\n\n"
-                "📁 Files sent:\n"
-                "• ✓ CSV file\n"
-                "• ✓ Excel file\n\n"
+                "📁 Output:\n"
+                "• ✓ Google Sheets updated\n"
+                "• ✓ CSV file sent\n"
+                "• ✓ Excel file sent\n\n"
                 "💡 _Use /startbulk to start another session._",
                 parse_mode='Markdown'
             )
@@ -1133,8 +1169,8 @@ class TelegramInvoiceBotWithDB:
             invoice_data = await self.convert_text_to_data(message_text)
 
             if invoice_data:
-                # Track total items processed
-                items_processed = 0
+                # Track total items processed and collect rows for batch write
+                rows_to_write = []
 
                 for invoice in invoice_data:
                     # Prepare row data for each invoice
@@ -1152,12 +1188,17 @@ class TelegramInvoiceBotWithDB:
                         unix_timestamp
                     ]
 
-                    # Append to CSV (bulk mode) or Google Sheets (normal mode)
+                    # Append to CSV (bulk mode) or collect for batch write (normal mode)
                     if is_bulk:
                         self.append_to_bulk_csv(user_tg.id, row_data)
                     else:
-                        self.sheet.append_row(row_data)
-                    items_processed += 1
+                        rows_to_write.append(row_data)
+
+                # Batch write to Google Sheets (single API call)
+                if not is_bulk and rows_to_write:
+                    self.sheet.append_rows(rows_to_write, value_input_option='USER_ENTERED')
+
+                items_processed = len(invoice_data)
 
                 # Increment bulk request count (1 request for text processing)
                 if is_bulk:
@@ -1492,7 +1533,7 @@ class TelegramInvoiceBotWithDB:
 
                 # Write data to CSV (bulk mode) or Google Sheets (normal mode) and send response
                 if all_invoice_data:
-                    items_processed = 0
+                    rows_to_write = []
                     for invoice in all_invoice_data:
                         row_data = [
                             invoice.get('waktu', ''),
@@ -1510,8 +1551,13 @@ class TelegramInvoiceBotWithDB:
                         if is_bulk:
                             self.append_to_bulk_csv(user_tg.id, row_data)
                         else:
-                            self.sheet.append_row(row_data)
-                        items_processed += 1
+                            rows_to_write.append(row_data)
+
+                    # Batch write to Google Sheets (single API call)
+                    if not is_bulk and rows_to_write:
+                        self.sheet.append_rows(rows_to_write, value_input_option='USER_ENTERED')
+
+                    items_processed = len(all_invoice_data)
 
                     # Increment bulk request count (1 per page processed)
                     if is_bulk:
@@ -1612,7 +1658,7 @@ class TelegramInvoiceBotWithDB:
             os.remove(temp_path)
 
             if invoice_data:
-                items_processed = 0
+                rows_to_write = []
                 for invoice in invoice_data:
                     row_data = [
                         invoice.get('waktu', ''),
@@ -1630,8 +1676,13 @@ class TelegramInvoiceBotWithDB:
                     if is_bulk:
                         self.append_to_bulk_csv(user_tg.id, row_data)
                     else:
-                        self.sheet.append_row(row_data)
-                    items_processed += 1
+                        rows_to_write.append(row_data)
+
+                # Batch write to Google Sheets (single API call)
+                if not is_bulk and rows_to_write:
+                    self.sheet.append_rows(rows_to_write, value_input_option='USER_ENTERED')
+
+                items_processed = len(invoice_data)
 
                 # Increment bulk request count (1 for image)
                 if is_bulk:

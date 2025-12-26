@@ -71,6 +71,12 @@ applyTo: '**'
 - Telegram ID: 33410730
 - Sheet: 1OwBzgxICijfhhZ2TttbouKhdSlDLFyHYixwd7Iwo-UU
 
+## Recent Changes (Dec 26, 2024 - Batch #2)
+- ✅ Optimized Google Sheets API calls to avoid rate limits
+- ✅ Changed individual `append_row()` calls to batch `append_rows()` 
+- ✅ All 3 handlers now batch write: text, PDF, image
+- ✅ Single API call per invoice processing (was N calls for N items)
+
 ## Milestone Status
 - ✅ Milestone 1: Database Foundation
 - ✅ Milestone 2: Bot Integration  
