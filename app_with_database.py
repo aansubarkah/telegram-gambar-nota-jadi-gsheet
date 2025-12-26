@@ -22,6 +22,8 @@ import requests
 import fitz  # PyMuPDF for PDF processing
 from PIL import Image
 import io
+import csv
+import pandas as pd
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -54,6 +56,9 @@ logger = logging.getLogger(__name__)
 
 class TelegramInvoiceBotWithDB:
     """Telegram bot with database-backed user management and quota system."""
+    
+    # Track bulk processing sessions: {telegram_id: {"csv_path": str, "items_count": int}}
+    bulk_sessions = {}
 
     @staticmethod
     async def convert_image_to_data(filepath, mime_type):
@@ -450,6 +455,63 @@ class TelegramInvoiceBotWithDB:
             os.makedirs(self.upload_dir)
             logger.info(f"Created upload directory: {self.upload_dir}")
 
+    def is_bulk_mode(self, telegram_id):
+        """Check if user is in bulk processing mode."""
+        return telegram_id in self.bulk_sessions
+
+    def get_bulk_csv_path(self, telegram_id):
+        """Get the CSV file path for a bulk session."""
+        return os.path.join(self.upload_dir, f"bulk_{telegram_id}.csv")
+
+    def start_bulk_session(self, telegram_id):
+        """Start a new bulk processing session."""
+        csv_path = self.get_bulk_csv_path(telegram_id)
+        
+        # Create CSV file with headers
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(config.DEFAULT_SHEET_COLUMNS)
+        
+        self.bulk_sessions[telegram_id] = {
+            "csv_path": csv_path,
+            "items_count": 0,
+            "requests_count": 0  # Track quota usage
+        }
+        return csv_path
+
+    def append_to_bulk_csv(self, telegram_id, row_data):
+        """Append a row to the bulk session CSV."""
+        if telegram_id not in self.bulk_sessions:
+            return False
+        
+        csv_path = self.bulk_sessions[telegram_id]["csv_path"]
+        with open(csv_path, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(row_data)
+        
+        self.bulk_sessions[telegram_id]["items_count"] += 1
+        return True
+
+    def increment_bulk_request_count(self, telegram_id):
+        """Increment the request count for quota tracking."""
+        if telegram_id in self.bulk_sessions:
+            self.bulk_sessions[telegram_id]["requests_count"] += 1
+
+    def end_bulk_session(self, telegram_id):
+        """End bulk session and return CSV path, items count, and requests count."""
+        if telegram_id not in self.bulk_sessions:
+            return None, 0, 0
+        
+        session = self.bulk_sessions.pop(telegram_id)
+        return session["csv_path"], session["items_count"], session["requests_count"]
+
+    def convert_csv_to_excel(self, csv_path):
+        """Convert CSV file to Excel format."""
+        excel_path = csv_path.replace('.csv', '.xlsx')
+        df = pd.read_csv(csv_path, encoding='utf-8')
+        df.to_excel(excel_path, index=False, engine='openpyxl')
+        return excel_path
+
     def setup_google_sheets(self, credentials_file, spreadsheet_id):
         """Setup Google Sheets API connection for a specific spreadsheet"""
         try:
@@ -523,6 +585,8 @@ class TelegramInvoiceBotWithDB:
             "/usage - Check your quota usage\n"
             "/mysheet - View your Google Sheet (paid tiers)\n"
             "/upgrade - View tier upgrade options\n"
+            "/startbulk - Start bulk processing (Platinum)\n"
+            "/endbulk - End bulk & download files (Platinum)\n"
         )
         await update.message.reply_text(welcome_message)
 
@@ -538,7 +602,7 @@ class TelegramInvoiceBotWithDB:
             "• FREE: 5 requests/day, shared sheet\n"
             "• SILVER: 50 requests/day, your own sheet\n"
             "• GOLD: 150 requests/day, your own sheet\n"
-            "• PLATINUM: 300 requests/day, your own sheet\n\n"
+            "• PLATINUM: 300 requests/day, bulk mode, your own sheet\n\n"
             "Commands:\n"
             "/start - Welcome message & registration\n"
             "/help - This help message\n"
@@ -546,7 +610,10 @@ class TelegramInvoiceBotWithDB:
             "/checkid - Get your Telegram ID\n"
             "/usage - Check quota usage\n"
             "/mysheet - View your Google Sheet\n"
-            "/upgrade - View upgrade options\n"
+            "/upgrade - View upgrade options\n\n"
+            "💎 Platinum Commands:\n"
+            "/startbulk - Start bulk processing mode\n"
+            "/endbulk - End bulk & download CSV/Excel\n"
         )
         await update.message.reply_text(help_message)
 
@@ -679,6 +746,7 @@ class TelegramInvoiceBotWithDB:
             "✓ Priority processing\n"
             "✓ Custom column order\n"
             "✓ Custom AI prompt\n"
+            "✓ Bulk processing mode\n"
             "✓ Dedicated support\n"
             "💰 *IDR 300.000/month*\n\n"
             "━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -689,6 +757,165 @@ class TelegramInvoiceBotWithDB:
             "_(Share this ID when contacting us)_"
         )
         await update.message.reply_text(upgrade_msg, parse_mode='Markdown')
+
+    # ============================================================
+    # BULK PROCESSING COMMANDS (Platinum+ only)
+    # ============================================================
+
+    async def startbulk_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /startbulk command - Start bulk processing mode (Platinum+ only)"""
+        user_tg = update.effective_user
+
+        # Get or create user
+        with get_db() as db:
+            user, _ = get_or_create_user(
+                db,
+                telegram_id=user_tg.id,
+                username=user_tg.username,
+                first_name=user_tg.first_name,
+                last_name=user_tg.last_name,
+                admin_user_ids=config.ADMIN_USER_IDS,
+            )
+            user_tier = user.tier
+
+        # Check if user has platinum tier or higher
+        if user_tier not in ['platinum', 'admin']:
+            await update.message.reply_text(
+                "⛔ *Bulk Processing - Platinum Feature*\n\n"
+                "This feature is only available for *PLATINUM* tier users!\n\n"
+                "📦 *What is Bulk Processing?*\n"
+                "• Process multiple invoices at once\n"
+                "• Data saved to CSV instead of Google Sheets\n"
+                "• Download CSV and Excel files when done\n"
+                "• Perfect for batch processing!\n\n"
+                "💎 Upgrade to PLATINUM to unlock this feature!\n"
+                "Use /upgrade to see options.",
+                parse_mode='Markdown'
+            )
+            return
+
+        # Check if already in bulk mode
+        if self.is_bulk_mode(user_tg.id):
+            session = self.bulk_sessions[user_tg.id]
+            await update.message.reply_text(
+                f"⚠️ You're already in bulk processing mode!\n\n"
+                f"📊 Current session:\n"
+                f"• Items collected: {session['items_count']}\n"
+                f"• Requests used: {session['requests_count']}\n\n"
+                f"Send /endbulk to finish and download files,\n"
+                f"or continue uploading more invoices."
+            )
+            return
+
+        # Start bulk session
+        csv_path = self.start_bulk_session(user_tg.id)
+        logger.info(f"User {user_tg.id} started bulk session: {csv_path}")
+
+        await update.message.reply_text(
+            "🚀 *Bulk Processing Mode Started!*\n\n"
+            "📦 You can now upload multiple invoices:\n"
+            "• Images (PNG, JPG)\n"
+            "• PDF documents\n"
+            "• Text messages\n\n"
+            "📊 All data will be collected in a CSV file.\n"
+            "⚠️ Quota still applies (1 per image/page).\n\n"
+            "When you're done, send /endbulk to:\n"
+            "• Get your CSV file\n"
+            "• Get your Excel file\n\n"
+            "💡 _Tip: Upload as many invoices as you need!_",
+            parse_mode='Markdown'
+        )
+
+    async def endbulk_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /endbulk command - End bulk processing and send files"""
+        user_tg = update.effective_user
+
+        # Check if user is in bulk mode
+        if not self.is_bulk_mode(user_tg.id):
+            await update.message.reply_text(
+                "❌ You're not in bulk processing mode!\n\n"
+                "Use /startbulk to start a bulk processing session first."
+            )
+            return
+
+        # Get session info and end it
+        csv_path, items_count, requests_count = self.end_bulk_session(user_tg.id)
+
+        if items_count == 0:
+            # No data collected - just clean up
+            try:
+                if os.path.exists(csv_path):
+                    os.remove(csv_path)
+            except Exception as e:
+                logger.error(f"Error cleaning up empty CSV: {e}")
+
+            await update.message.reply_text(
+                "⚠️ *Bulk Session Ended*\n\n"
+                "No invoice data was collected during this session.\n"
+                "No files to download.\n\n"
+                "Use /startbulk to start a new session.",
+                parse_mode='Markdown'
+            )
+            return
+
+        try:
+            await update.message.reply_text(
+                f"🔄 Processing your bulk data...\n\n"
+                f"📊 Items collected: {items_count}\n"
+                f"📈 Requests used: {requests_count}"
+            )
+
+            # Convert CSV to Excel
+            excel_path = self.convert_csv_to_excel(csv_path)
+
+            # Send CSV file
+            with open(csv_path, 'rb') as csv_file:
+                await context.bot.send_document(
+                    chat_id=update.effective_chat.id,
+                    document=csv_file,
+                    filename=f"invoice_data_{user_tg.id}.csv",
+                    caption="📄 *CSV File*\n\nYour invoice data in CSV format.",
+                    parse_mode='Markdown'
+                )
+
+            # Send Excel file
+            with open(excel_path, 'rb') as excel_file:
+                await context.bot.send_document(
+                    chat_id=update.effective_chat.id,
+                    document=excel_file,
+                    filename=f"invoice_data_{user_tg.id}.xlsx",
+                    caption="📊 *Excel File*\n\nYour invoice data in Excel format.",
+                    parse_mode='Markdown'
+                )
+
+            # Clean up files
+            try:
+                os.remove(csv_path)
+                os.remove(excel_path)
+                logger.info(f"Cleaned up bulk files for user {user_tg.id}")
+            except Exception as e:
+                logger.error(f"Error cleaning up bulk files: {e}")
+
+            await update.message.reply_text(
+                "✅ *Bulk Processing Complete!*\n\n"
+                f"📊 Summary:\n"
+                f"• Total items: {items_count}\n"
+                f"• Quota used: {requests_count}\n\n"
+                "📁 Files sent:\n"
+                "• ✓ CSV file\n"
+                "• ✓ Excel file\n\n"
+                "💡 _Use /startbulk to start another session._",
+                parse_mode='Markdown'
+            )
+
+            logger.info(f"User {user_tg.id} completed bulk session: {items_count} items, {requests_count} requests")
+
+        except Exception as e:
+            logger.error(f"Error in endbulk: {e}")
+            await update.message.reply_text(
+                f"❌ Error processing bulk data: {str(e)}\n\n"
+                "Please try /endbulk again or contact support."
+            )
 
     # ============================================================
     # ADMIN COMMANDS
@@ -890,11 +1117,18 @@ class TelegramInvoiceBotWithDB:
                 else:
                     spreadsheet_url = 'https://bit.ly/invoice-to-gsheets'
 
-            # Setup Google Sheets client
-            self.setup_google_sheets(self.google_credentials_file, target_spreadsheet_id)
+            # Check if user is in bulk mode
+            is_bulk = self.is_bulk_mode(user_tg.id)
+
+            # Setup Google Sheets client only if not in bulk mode
+            if not is_bulk:
+                self.setup_google_sheets(self.google_credentials_file, target_spreadsheet_id)
 
             # Process text to extract invoice data
-            await update.message.reply_text("🔄 Processing text message, please wait...")
+            if is_bulk:
+                await update.message.reply_text("🔄 [BULK] Processing text message...")
+            else:
+                await update.message.reply_text("🔄 Processing text message, please wait...")
 
             invoice_data = await self.convert_text_to_data(message_text)
 
@@ -918,9 +1152,16 @@ class TelegramInvoiceBotWithDB:
                         unix_timestamp
                     ]
 
-                    # Append to Google Sheets
-                    self.sheet.append_row(row_data)
+                    # Append to CSV (bulk mode) or Google Sheets (normal mode)
+                    if is_bulk:
+                        self.append_to_bulk_csv(user_tg.id, row_data)
+                    else:
+                        self.sheet.append_row(row_data)
                     items_processed += 1
+
+                # Increment bulk request count (1 request for text processing)
+                if is_bulk:
+                    self.increment_bulk_request_count(user_tg.id)
 
                 # Log successful activity
                 with get_db() as db:
@@ -939,16 +1180,31 @@ class TelegramInvoiceBotWithDB:
                     quota_status = check_quota(db, user, config.TIMEZONE)
 
                 # Send confirmation
-                await update.message.reply_text(
-                    f"✅ Data extracted and saved successfully!\n\n"
-                    f"📊 Summary:\n"
-                    f"📝 Items processed: {items_processed}\n"
-                    f"🏪 Seller: {invoice_data[0].get('penjual', 'N/A')}\n"
-                    f"💰 Total (all items): {sum(inv.get('subtotal', 0) for inv in invoice_data):,.2f}\n"
-                    f"⏰ Date: {invoice_data[0].get('waktu', 'N/A')}\n\n"
-                    f"📄 See the full data in Google Sheets: {spreadsheet_url}\n\n"
-                    f"📈 Quota: {quota_status.used_today}/{quota_status.daily_limit if quota_status.daily_limit != -1 else '∞'} used today"
-                )
+                if is_bulk:
+                    session = self.bulk_sessions[user_tg.id]
+                    await update.message.reply_text(
+                        f"✅ [BULK] Data extracted and added to batch!\n\n"
+                        f"📊 Summary:\n"
+                        f"📝 Items in this batch: {items_processed}\n"
+                        f"🏪 Seller: {invoice_data[0].get('penjual', 'N/A')}\n"
+                        f"💰 Total: {sum(inv.get('subtotal', 0) for inv in invoice_data):,.2f}\n\n"
+                        f"📦 Bulk session:\n"
+                        f"• Total items: {session['items_count']}\n"
+                        f"• Requests used: {session['requests_count']}\n\n"
+                        f"📈 Quota: {quota_status.used_today}/{quota_status.daily_limit if quota_status.daily_limit != -1 else '∞'}\n\n"
+                        f"💡 Send /endbulk to download files."
+                    )
+                else:
+                    await update.message.reply_text(
+                        f"✅ Data extracted and saved successfully!\n\n"
+                        f"📊 Summary:\n"
+                        f"📝 Items processed: {items_processed}\n"
+                        f"🏪 Seller: {invoice_data[0].get('penjual', 'N/A')}\n"
+                        f"💰 Total (all items): {sum(inv.get('subtotal', 0) for inv in invoice_data):,.2f}\n"
+                        f"⏰ Date: {invoice_data[0].get('waktu', 'N/A')}\n\n"
+                        f"📄 See the full data in Google Sheets: {spreadsheet_url}\n\n"
+                        f"📈 Quota: {quota_status.used_today}/{quota_status.daily_limit if quota_status.daily_limit != -1 else '∞'} used today"
+                    )
 
             else:
                 # Log failed activity
@@ -1076,8 +1332,12 @@ class TelegramInvoiceBotWithDB:
                 else:
                     spreadsheet_url = 'https://bit.ly/invoice-to-gsheets'
 
-            # Setup Google Sheets client
-            self.setup_google_sheets(self.google_credentials_file, target_spreadsheet_id)
+            # Check if user is in bulk mode
+            is_bulk = self.is_bulk_mode(user_tg.id)
+
+            # Setup Google Sheets client only if not in bulk mode
+            if not is_bulk:
+                self.setup_google_sheets(self.google_credentials_file, target_spreadsheet_id)
 
             # Determine file type
             if update.message.photo:
@@ -1230,7 +1490,7 @@ class TelegramInvoiceBotWithDB:
                 # Clean up temp file
                 os.remove(temp_path)
 
-                # Write data to sheets and send response
+                # Write data to CSV (bulk mode) or Google Sheets (normal mode) and send response
                 if all_invoice_data:
                     items_processed = 0
                     for invoice in all_invoice_data:
@@ -1247,8 +1507,16 @@ class TelegramInvoiceBotWithDB:
                             str(user_tg.id),
                             unix_timestamp
                         ]
-                        self.sheet.append_row(row_data)
+                        if is_bulk:
+                            self.append_to_bulk_csv(user_tg.id, row_data)
+                        else:
+                            self.sheet.append_row(row_data)
                         items_processed += 1
+
+                    # Increment bulk request count (1 per page processed)
+                    if is_bulk:
+                        for _ in range(pages_to_process):
+                            self.increment_bulk_request_count(user_tg.id)
 
                     # Get final quota status
                     with get_db() as db:
@@ -1266,19 +1534,38 @@ class TelegramInvoiceBotWithDB:
                     
                     failed_msg = f"❌ Pages failed: {pages_failed}\n" if pages_failed > 0 else ""
 
-                    await update.message.reply_text(
-                        f"✅ PDF processed {'partially' if pages_skipped > 0 else 'successfully'}!\n\n"
-                        f"📊 Summary:\n"
-                        f"📄 Pages processed: {pages_processed}/{page_count}\n"
-                        f"{failed_msg}"
-                        f"{skipped_msg}"
-                        f"📝 Items extracted: {items_processed}\n"
-                        f"🏪 Seller: {all_invoice_data[0].get('penjual', 'N/A')}\n"
-                        f"💰 Total: {sum(inv.get('subtotal', 0) for inv in all_invoice_data):,.2f}\n\n"
-                        f"📄 Google Sheets: {spreadsheet_url}\n\n"
-                        f"📈 Quota used: {pages_to_process} (1 per page)\n"
-                        f"📊 Today's usage: {quota_status.used_today}/{quota_status.daily_limit if quota_status.daily_limit != -1 else '∞'}"
-                    )
+                    if is_bulk:
+                        session = self.bulk_sessions[user_tg.id]
+                        await update.message.reply_text(
+                            f"✅ [BULK] PDF processed {'partially' if pages_skipped > 0 else 'successfully'}!\n\n"
+                            f"📊 Summary:\n"
+                            f"📄 Pages processed: {pages_processed}/{page_count}\n"
+                            f"{failed_msg}"
+                            f"{skipped_msg}"
+                            f"📝 Items extracted: {items_processed}\n"
+                            f"🏪 Seller: {all_invoice_data[0].get('penjual', 'N/A')}\n"
+                            f"💰 Total: {sum(inv.get('subtotal', 0) for inv in all_invoice_data):,.2f}\n\n"
+                            f"📦 Bulk session:\n"
+                            f"• Total items: {session['items_count']}\n"
+                            f"• Requests used: {session['requests_count']}\n\n"
+                            f"📈 Quota used: {pages_to_process} (1 per page)\n"
+                            f"📊 Today's usage: {quota_status.used_today}/{quota_status.daily_limit if quota_status.daily_limit != -1 else '∞'}\n\n"
+                            f"💡 Send /endbulk to download files."
+                        )
+                    else:
+                        await update.message.reply_text(
+                            f"✅ PDF processed {'partially' if pages_skipped > 0 else 'successfully'}!\n\n"
+                            f"📊 Summary:\n"
+                            f"📄 Pages processed: {pages_processed}/{page_count}\n"
+                            f"{failed_msg}"
+                            f"{skipped_msg}"
+                            f"📝 Items extracted: {items_processed}\n"
+                            f"🏪 Seller: {all_invoice_data[0].get('penjual', 'N/A')}\n"
+                            f"💰 Total: {sum(inv.get('subtotal', 0) for inv in all_invoice_data):,.2f}\n\n"
+                            f"📄 Google Sheets: {spreadsheet_url}\n\n"
+                            f"📈 Quota used: {pages_to_process} (1 per page)\n"
+                            f"📊 Today's usage: {quota_status.used_today}/{quota_status.daily_limit if quota_status.daily_limit != -1 else '∞'}"
+                        )
                 else:
                     skipped_info = ""
                     if pages_skipped > 0:
@@ -1316,7 +1603,10 @@ class TelegramInvoiceBotWithDB:
                 )
                 return
 
-            await update.message.reply_text("🔄 Processing image, please wait...")
+            if is_bulk:
+                await update.message.reply_text("🔄 [BULK] Processing image...")
+            else:
+                await update.message.reply_text("🔄 Processing image, please wait...")
             
             invoice_data = await self.convert_image_to_data(temp_path, mime_type)
             os.remove(temp_path)
@@ -1337,8 +1627,15 @@ class TelegramInvoiceBotWithDB:
                         str(user_tg.id),
                         unix_timestamp
                     ]
-                    self.sheet.append_row(row_data)
+                    if is_bulk:
+                        self.append_to_bulk_csv(user_tg.id, row_data)
+                    else:
+                        self.sheet.append_row(row_data)
                     items_processed += 1
+
+                # Increment bulk request count (1 for image)
+                if is_bulk:
+                    self.increment_bulk_request_count(user_tg.id)
 
                 with get_db() as db:
                     user = get_user_by_telegram_id(db, user_tg.id)
@@ -1353,16 +1650,31 @@ class TelegramInvoiceBotWithDB:
                     db.commit()
                     quota_status = check_quota(db, user, config.TIMEZONE)
 
-                await update.message.reply_text(
-                    f"✅ Data extracted and saved successfully!\n\n"
-                    f"📊 Summary:\n"
-                    f"📝 Items processed: {items_processed}\n"
-                    f"🏪 Seller: {invoice_data[0].get('penjual', 'N/A')}\n"
-                    f"💰 Total: {sum(inv.get('subtotal', 0) for inv in invoice_data):,.2f}\n"
-                    f"⏰ Date: {invoice_data[0].get('waktu', 'N/A')}\n\n"
-                    f"📄 Google Sheets: {spreadsheet_url}\n\n"
-                    f"📈 Quota: {quota_status.used_today}/{quota_status.daily_limit if quota_status.daily_limit != -1 else '∞'} used today"
-                )
+                if is_bulk:
+                    session = self.bulk_sessions[user_tg.id]
+                    await update.message.reply_text(
+                        f"✅ [BULK] Image processed and added to batch!\n\n"
+                        f"📊 Summary:\n"
+                        f"📝 Items: {items_processed}\n"
+                        f"🏪 Seller: {invoice_data[0].get('penjual', 'N/A')}\n"
+                        f"💰 Total: {sum(inv.get('subtotal', 0) for inv in invoice_data):,.2f}\n\n"
+                        f"📦 Bulk session:\n"
+                        f"• Total items: {session['items_count']}\n"
+                        f"• Requests used: {session['requests_count']}\n\n"
+                        f"📈 Quota: {quota_status.used_today}/{quota_status.daily_limit if quota_status.daily_limit != -1 else '∞'}\n\n"
+                        f"💡 Send /endbulk to download files."
+                    )
+                else:
+                    await update.message.reply_text(
+                        f"✅ Data extracted and saved successfully!\n\n"
+                        f"📊 Summary:\n"
+                        f"📝 Items processed: {items_processed}\n"
+                        f"🏪 Seller: {invoice_data[0].get('penjual', 'N/A')}\n"
+                        f"💰 Total: {sum(inv.get('subtotal', 0) for inv in invoice_data):,.2f}\n"
+                        f"⏰ Date: {invoice_data[0].get('waktu', 'N/A')}\n\n"
+                        f"📄 Google Sheets: {spreadsheet_url}\n\n"
+                        f"📈 Quota: {quota_status.used_today}/{quota_status.daily_limit if quota_status.daily_limit != -1 else '∞'} used today"
+                    )
             else:
                 with get_db() as db:
                     user = get_user_by_telegram_id(db, user_tg.id)
@@ -1463,6 +1775,10 @@ class TelegramInvoiceBotWithDB:
         application.add_handler(CommandHandler("usage", self.usage_command))
         application.add_handler(CommandHandler("mysheet", self.mysheet_command))
         application.add_handler(CommandHandler("upgrade", self.upgrade_command))
+
+        # Add bulk processing command handlers (Platinum+)
+        application.add_handler(CommandHandler("startbulk", self.startbulk_command))
+        application.add_handler(CommandHandler("endbulk", self.endbulk_command))
 
         # Add admin command handlers
         application.add_handler(CommandHandler("settier", self.settier_command))

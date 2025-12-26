@@ -15,13 +15,13 @@ A Telegram bot that extracts invoice/receipt data from images, PDFs, and text me
 
 ### FR-1: User Tier System
 
-| Tier | Daily Limit | Google Sheet | Price |
-|------|-------------|--------------|-------|
-| Free | 5 images/day | Default shared sheet | Free |
-| Silver | 50 images/day | User's own sheet | TBD |
-| Gold | 150 images/day | User's own sheet | TBD |
-| Platinum | 300 images/day | User's own sheet | TBD |
-| Admin | Unlimited | Any sheet | N/A |
+| Tier | Daily Limit | Google Sheet | Bulk Mode | Price |
+|------|-------------|--------------|-----------|-------|
+| Free | 5 images/day | Default shared sheet | ❌ | Free |
+| Silver | 50 images/day | User's own sheet | ❌ | TBD |
+| Gold | 150 images/day | User's own sheet | ❌ | TBD |
+| Platinum | 300 images/day | User's own sheet | ✅ | TBD |
+| Admin | Unlimited | Any sheet | ✅ | N/A |
 
 **Requirements:**
 - FR-1.1: New users automatically registered as "free" tier
@@ -50,6 +50,8 @@ A Telegram bot that extracts invoice/receipt data from images, PDFs, and text me
 | `/usage` | Show today's usage vs daily limit | All |
 | `/mysheet` | Show linked Google Sheet URL | Paid tiers |
 | `/upgrade` | Show tier upgrade options | All |
+| `/startbulk` | Start bulk processing mode | Platinum+ |
+| `/endbulk` | End bulk mode & download CSV/Excel | Platinum+ |
 | `/settier <user_id> <tier>` | Change user's tier | Admin only |
 | `/setsheet <user_id> <sheet_id>` | Set user's Google Sheet ID | Admin only |
 | `/stats` | Show overall bot statistics | Admin only |
@@ -82,6 +84,18 @@ A Telegram bot that extracts invoice/receipt data from images, PDFs, and text me
 - FR-6.3: Custom prompts define which fields to extract and their order
 - FR-6.4: Admin can set/update user's custom prompt via command
 - FR-6.5: Custom sheet structure must match custom prompt output fields
+
+### FR-7: Bulk Processing Mode (Platinum+)
+
+**Requirements:**
+- FR-7.1: Platinum and Admin tiers can use bulk processing mode
+- FR-7.2: `/startbulk` command starts a bulk session, creating a CSV file
+- FR-7.3: In bulk mode, data appends to CSV instead of Google Sheets
+- FR-7.4: `/endbulk` command ends session, converts CSV to Excel, sends both files
+- FR-7.5: Quota still applies in bulk mode (1 per image, 1 per PDF page)
+- FR-7.6: CSV stored temporarily as `uploads/bulk_{telegram_id}.csv`
+- FR-7.7: Files are cleaned up after sending to user
+- FR-7.8: Session state tracks items count and requests count
 
 ---
 

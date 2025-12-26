@@ -45,6 +45,22 @@ applyTo: '**'
 - ✅ Admin auto-upgrade on login via `get_or_create_user()`
 - ✅ Fixed admin ID 33410730 tier assignment
 
+## Recent Changes (Dec 26, 2024)
+- ✅ Added bulk processing feature for Platinum tier
+- ✅ New commands: /startbulk, /endbulk
+- ✅ Bulk mode saves to CSV instead of Google Sheets
+- ✅ Exports both CSV and Excel files on /endbulk
+- ✅ Quota still applies in bulk mode (1 per image/page)
+- ✅ Added pandas and openpyxl to requirements-bot.txt
+
+## Bulk Processing Feature (Platinum+)
+- /startbulk: Starts bulk session, creates CSV file
+- User uploads images/PDFs/text as normal
+- Data appends to CSV (not Google Sheets)
+- /endbulk: Converts CSV to Excel, sends both files, cleans up
+- Quota counter still applies (1 per image, 1 per PDF page)
+- CSV stored as: uploads/bulk_{telegram_id}.csv
+
 ## PDF Processing Behavior
 - Each page = 1 quota usage
 - If user has less quota than pages, bot processes what it can

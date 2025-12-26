@@ -43,6 +43,8 @@
 - `usage_command()` - Show quota usage
 - `mysheet_command()` - Show Google Sheet URL
 - `upgrade_command()` - Show tier options
+- `startbulk_command()` - Platinum+: start bulk mode
+- `endbulk_command()` - Platinum+: end bulk & send files
 - `settier_command()` - Admin: change tier
 - `setsheet_command()` - Admin: set sheet ID
 - `setprompt_command()` - Admin: set custom prompt
@@ -53,6 +55,13 @@
 - `handle_photo()` - Process photo messages
 - `handle_document()` - Process PDF/image documents
 - `handle_text()` - Process text messages with invoice data
+
+**bulk.py** - Bulk processing helpers (in bot class)
+- `is_bulk_mode()` - Check if user is in bulk mode
+- `start_bulk_session()` - Create CSV and start session
+- `append_to_bulk_csv()` - Append row to CSV
+- `end_bulk_session()` - End session and return file paths
+- `convert_csv_to_excel()` - Convert CSV to Excel using pandas
 
 ### 2. Services Layer (`bot/services/`)
 
