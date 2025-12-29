@@ -28,7 +28,6 @@ import pandas as pd
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from google.oauth2.service_account import Credentials
-from datetime import datetime
 
 from config import config, LEGACY_USER_MAPPING
 from prompts import DEFAULT_PROMPT, TEXT_PROMPT
@@ -39,7 +38,6 @@ from database.crud import (
     get_user_spreadsheet_id,
     check_quota,
     log_activity,
-    get_today_usage,
     update_user_tier,
     update_user_sheet_id,
     get_stats,
@@ -376,7 +374,7 @@ class TelegramInvoiceBotWithDB:
                 content = result['choices'][0].get('message', {}).get('content')
 
                 if content is None:
-                    logger.error(f"Content is None in text API response")
+                    logger.error("Content is None in text API response")
                     return None
 
                 # Parse JSON response (same logic as image processing)
@@ -1262,9 +1260,9 @@ class TelegramInvoiceBotWithDB:
                     db.commit()
 
                 await update.message.reply_text(
-                    f"Hi, please upload a photo or document containing your invoice/receipt.\n"
-                    f"The data will be extracted and saved to Google Sheets.\n\n"
-                    f"Use /help to see how to use this bot."
+                    "Hi, please upload a photo or document containing your invoice/receipt.\n"
+                    "The data will be extracted and saved to Google Sheets.\n\n"
+                    "Use /help to see how to use this bot."
                 )
 
             logger.info(f"Processed message from {user_tg.username}: {message_text[:50]}")
@@ -1631,14 +1629,16 @@ class TelegramInvoiceBotWithDB:
             # ============================================================
             # Check quota for single image
             if not quota_status.can_proceed:
-                log_activity(
-                    db,
-                    user_id=user.id,
-                    file_type="image",
-                    processing_status="limit_exceeded",
-                    error_message="Daily quota exceeded"
-                )
-                db.commit()
+                with get_db() as db:
+                    user = get_user_by_telegram_id(db, user_tg.id)
+                    log_activity(
+                        db,
+                        user_id=user.id,
+                        file_type="image",
+                        processing_status="limit_exceeded",
+                        error_message="Daily quota exceeded"
+                    )
+                    db.commit()
                 os.remove(temp_path)
 
                 await update.message.reply_text(
