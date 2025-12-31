@@ -59,6 +59,76 @@ class TelegramInvoiceBotWithDB:
     bulk_sessions = {}
 
     @staticmethod
+    def _make_api_request_with_retry(headers, payload, max_retries=2):
+        """Make API request with retry logic and model fallback for 503 errors.
+        
+        Args:
+            headers: Request headers
+            payload: Request payload (will be modified to try fallback models)
+            max_retries: Maximum number of retry attempts per model
+            
+        Returns:
+            Response object or None on failure
+        """
+        # Build list of models to try: primary + fallbacks
+        models_to_try = [config.AI_MODEL] + config.AI_MODEL_FALLBACKS
+        
+        for model_idx, model in enumerate(models_to_try):
+            # Update payload with current model
+            payload_copy = payload.copy()
+            payload_copy["model"] = model
+            
+            model_name = model.split("/")[-1] if "/" in model else model  # Shorten for logging
+            
+            for attempt in range(max_retries):
+                try:
+                    response = requests.post(
+                        config.NANOGPT_API_URL,
+                        headers=headers,
+                        json=payload_copy,
+                        timeout=config.AI_TIMEOUT
+                    )
+                    
+                    # If successful, return immediately
+                    if response.status_code == 200:
+                        if model_idx > 0:
+                            logger.info(f"✅ Fallback model '{model_name}' succeeded!")
+                        return response
+                    
+                    # On client error (4xx except 429), return immediately (no retry)
+                    if 400 <= response.status_code < 500 and response.status_code != 429:
+                        logger.error(f"Client error {response.status_code}: {response.text[:100]}")
+                        return response
+                    
+                    # On 503/500/429 server errors, retry with backoff
+                    if response.status_code >= 500 or response.status_code == 429:
+                        wait_time = (2 ** attempt) + 1  # 2, 3 seconds
+                        logger.warning(f"Model '{model_name}' returned {response.status_code}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                        time.sleep(wait_time)
+                        continue
+                        
+                    return response
+                    
+                except requests.exceptions.Timeout:
+                    wait_time = (2 ** attempt) + 1
+                    logger.warning(f"Model '{model_name}' timeout, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                    continue
+                except requests.exceptions.RequestException as e:
+                    logger.error(f"Request exception with model '{model_name}': {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(2)
+                        continue
+                    break  # Try next model
+            
+            # This model failed all retries, try next fallback
+            if model_idx < len(models_to_try) - 1:
+                logger.warning(f"Model '{model_name}' failed, trying fallback model...")
+        
+        logger.error(f"All models and retries exhausted. Models tried: {len(models_to_try)}")
+        return None
+
+    @staticmethod
     async def convert_image_to_data(filepath, mime_type):
         """Convert image to structured data using NanoGPT API with vision model"""
         try:
@@ -100,12 +170,11 @@ class TelegramInvoiceBotWithDB:
                 "max_tokens": config.AI_MAX_TOKENS,
             }
 
-            response = requests.post(
-                config.NANOGPT_API_URL,
-                headers=headers,
-                json=payload,
-                timeout=config.AI_TIMEOUT
-            )
+            response = TelegramInvoiceBotWithDB._make_api_request_with_retry(headers, payload)
+            
+            if response is None:
+                logger.error("API request failed after all retries")
+                return None
 
             if response.status_code == 200:
                 result = response.json()
@@ -275,12 +344,11 @@ class TelegramInvoiceBotWithDB:
                 "max_tokens": config.AI_MAX_TOKENS,
             }
 
-            response = requests.post(
-                config.NANOGPT_API_URL,
-                headers=headers,
-                json=payload,
-                timeout=config.AI_TIMEOUT
-            )
+            response = TelegramInvoiceBotWithDB._make_api_request_with_retry(headers, payload)
+            
+            if response is None:
+                logger.error("PDF API request failed after all retries")
+                return None
 
             if response.status_code == 200:
                 result = response.json()
@@ -362,12 +430,11 @@ class TelegramInvoiceBotWithDB:
                 "max_tokens": config.AI_MAX_TOKENS,
             }
 
-            response = requests.post(
-                config.NANOGPT_API_URL,
-                headers=headers,
-                json=payload,
-                timeout=config.AI_TIMEOUT
-            )
+            response = TelegramInvoiceBotWithDB._make_api_request_with_retry(headers, payload)
+            
+            if response is None:
+                logger.error("Text API request failed after all retries")
+                return None
 
             if response.status_code == 200:
                 result = response.json()

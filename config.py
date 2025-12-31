@@ -69,8 +69,13 @@ class Config:
     NANOGPT_API_KEY: str = NANOGPT_API_KEY
     NANOGPT_API_URL: str = "https://nano-gpt.com/api/v1/chat/completions"
     
-    # Vision model for invoice extraction (gpt-4o has vision capability)
+    # Vision model for invoice extraction (with fallbacks)
     AI_MODEL: str = "Qwen/Qwen3-VL-235B-A22B-Instruct"
+    AI_MODEL_FALLBACKS: List[str] = field(default_factory=lambda: [
+        "qwen25-vl-72b-instruct",  # Smaller, tested working
+        "qwen3-vl-235b-a22b-instruct-original",  # Alternative provider
+        "qwen3-vl-235b-a22b-thinking",  # Meta's vision model
+    ])
     
     # Timeout settings (connect_timeout, read_timeout)
     AI_TIMEOUT: tuple = (60, 120)
