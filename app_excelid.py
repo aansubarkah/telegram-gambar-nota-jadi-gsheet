@@ -281,14 +281,21 @@ In groups, @mention me to get my attention!
             # Get buffered images and conversation history
             buffered_images, history = get_session_for_question(user_id, chat_id)
             
+            # Check if user is replying to an image (especially useful in groups)
+            reply_to_image = None
+            if update.message.reply_to_message and update.message.reply_to_message.photo:
+                reply_to_image = update.message.reply_to_message.photo[-1]  # Best quality
+                logger.info(f"User {user_name} replied to an image with question")
+            
             # Show typing indicator
             await context.bot.send_chat_action(
                 chat_id=update.effective_chat.id, 
                 action="typing"
             )
             
+            # Determine which images to use: buffered > reply_to > none
             if buffered_images:
-                # Process with images!
+                # Process with buffered images!
                 is_followup = len(history) > 0
                 
                 if is_followup:
@@ -329,6 +336,39 @@ In groups, @mention me to get my attention!
                 add_to_history(user_id, chat_id, user_question, answer)
                 
                 logger.info(f"User {user_name} asked about {len(images_base64)} images: {user_question}")
+            
+            elif reply_to_image:
+                # No buffered images, but user replied to an image - use that!
+                await update.message.reply_text("🔄 Processing the image you replied to...")
+                
+                try:
+                    photo_file = await context.bot.get_file(reply_to_image.file_id)
+                    photo_bytes = await photo_file.download_as_bytearray()
+                    image_b64 = base64.b64encode(photo_bytes).decode('utf-8')
+                    image_b64 = self.compress_image(image_b64, max_size=1024, quality=75)
+                    
+                    # Also add this image to the session for follow-ups
+                    add_image_to_session(user_id, chat_id, reply_to_image.file_id, 
+                                        update.message.reply_to_message.message_id)
+                    # Mark session as started
+                    get_session_for_question(user_id, chat_id)
+                    
+                    answer = await self.generate_answer(
+                        user_question,
+                        images_base64=[image_b64]
+                    )
+                    
+                    # Save to history for follow-up questions
+                    add_to_history(user_id, chat_id, user_question, answer)
+                    
+                    logger.info(f"User {user_name} replied to image with question: {user_question}")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to process reply-to image: {e}")
+                    await update.message.reply_text(
+                        "⚠️ Could not retrieve the image you replied to. Please send it directly."
+                    )
+                    return
             else:
                 # No images - regular text question
                 answer = await self.generate_answer(user_question)
