@@ -77,6 +77,37 @@ applyTo: '**'
 - ✅ All 3 handlers now batch write: text, PDF, image
 - ✅ Single API call per invoice processing (was N calls for N items)
 
+## Recent Changes (Jan 8, 2026)
+- ✅ Added session-based image buffering to `app_excelid.py`
+- ✅ Multi-image Q&A: Users can send multiple images, then ask questions
+- ✅ Follow-up support: Same images can be queried multiple times
+- ✅ Conversation history preserved for context in follow-ups
+- ✅ New commands: /status, /clear for session management
+- ✅ Group vs DM behavior: Silent buffering in groups, @mention to trigger
+
+## Session-Based Image Q&A (app_excelid.py)
+**Flow:**
+1. User sends images → buffered (silent in groups, acknowledged in DM)
+2. User sends text question → processes all buffered images
+3. Follow-up questions use same images + conversation history
+4. Sending NEW image → clears old session, starts fresh
+5. Session expires after 30 min inactivity
+
+**Trigger Mechanism:**
+| Context | Trigger |
+|---------|---------|
+| Group | @mention bot |
+| Direct | Any text message |
+
+**Commands:**
+- `/status` - Shows buffered images count, history count
+- `/clear` - Clears session manually
+
+**Config:**
+- SESSION_TIMEOUT_MINUTES = 30
+- MAX_IMAGES_PER_SESSION = 10
+- MAX_HISTORY_PAIRS = 10
+
 ## Milestone Status
 - ✅ Milestone 1: Database Foundation
 - ✅ Milestone 2: Bot Integration  
