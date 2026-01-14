@@ -179,6 +179,9 @@ class TelegramInvoiceBotWithDB:
             if response.status_code == 200:
                 result = response.json()
                 logger.info(f"API Response structure: {result.keys() if isinstance(result, dict) else 'Not a dict'}")
+                
+                # DEBUG: Log full raw response for troubleshooting
+                logger.info(f"🔍 DEBUG RAW RESPONSE: {json.dumps(result, ensure_ascii=False)[:2000]}")
 
                 # Validate response structure
                 if not isinstance(result, dict) or 'choices' not in result:
@@ -190,6 +193,9 @@ class TelegramInvoiceBotWithDB:
                     return None
 
                 content = result['choices'][0].get('message', {}).get('content')
+                
+                # DEBUG: Log raw content before any parsing
+                logger.info(f"🔍 DEBUG RAW CONTENT: {repr(content)[:1500]}")
 
                 if content is None:
                     logger.error(f"Content is None in API response: {result}")
@@ -244,9 +250,14 @@ class TelegramInvoiceBotWithDB:
                     # If it's not a list, wrap it
                     if not isinstance(data, list):
                         data = [data]
+                    
+                    # DEBUG: Log parsed data
+                    logger.info(f"🔍 DEBUG PARSED DATA: {len(data)} items - {json.dumps(data, ensure_ascii=False)[:800]}")
 
                     if isinstance(data, list) and len(data) > 0:
                         return data  # Return all data
+                    
+                    logger.warning(f"🔍 DEBUG: Parsed data is empty list or None")
                     return None
                 except Exception as e:
                     logger.error(f"Error parsing JSON response: {e}")
@@ -353,6 +364,9 @@ class TelegramInvoiceBotWithDB:
             if response.status_code == 200:
                 result = response.json()
                 content = result['choices'][0].get('message', {}).get('content')
+                
+                # DEBUG: Log raw content for PDF pages
+                logger.info(f"🔍 DEBUG PDF PAGE {page_num + 1} RAW CONTENT: {repr(content)[:1500]}")
 
                 if content:
                     # JSON extraction logic
@@ -439,6 +453,9 @@ class TelegramInvoiceBotWithDB:
             if response.status_code == 200:
                 result = response.json()
                 content = result['choices'][0].get('message', {}).get('content')
+                
+                # DEBUG: Log raw content for text processing
+                logger.info(f"🔍 DEBUG TEXT RAW CONTENT: {repr(content)[:1500]}")
 
                 if content is None:
                     logger.error("Content is None in text API response")
