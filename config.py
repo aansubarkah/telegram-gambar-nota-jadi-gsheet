@@ -70,9 +70,10 @@ class Config:
     NANOGPT_API_URL: str = "https://nano-gpt.com/api/v1/chat/completions"
     
     # Vision model for invoice extraction (with fallbacks)
-    AI_MODEL: str = "zai-org/glm-4.6v"
+    AI_MODEL: str = "qwen/qwen3.5-397b-a17b"
     AI_MODEL_FALLBACKS: List[str] = field(default_factory=lambda: [
-        "qwen3-vl-235b-a22b-instruct-original"
+        "qwen3-vl-235b-a22b-instruct-original",
+        "zai-org/glm-4.6v",
         "qwen25-vl-72b-instruct",  # Smaller, tested working
         "Qwen/Qwen3-VL-235B-A22B-Instruct",  # Alternative provider
         "qwen3-vl-235b-a22b-thinking",  # Meta's vision model
