@@ -11,129 +11,138 @@ from typing import Dict, List
 
 # Import existing credentials for backward compatibility
 from credentials import (
-    TELEGRAM_BOT_TOKEN,
-    GOOGLE_CREDENTIALS_FILE,
-    SPREADSHEET_ID,
     CHUTES_API_KEY,
+    GOOGLE_CREDENTIALS_FILE,
     NANOGPT_API_KEY,
+    SPREADSHEET_ID,
+    TELEGRAM_BOT_TOKEN,
 )
 
 
 @dataclass
 class Config:
     """Application configuration."""
-    
+
     # ============================================================
     # Telegram Settings
     # ============================================================
     TELEGRAM_BOT_TOKEN: str = TELEGRAM_BOT_TOKEN
-    
+
     # List of Telegram user IDs with admin privileges
     # These users can use admin commands and have unlimited quota
-    ADMIN_USER_IDS: List[int] = field(default_factory=lambda: [
-        33410730,  # Aan
-        6931060098,  # Basang Data
-    ])
-    
+    ADMIN_USER_IDS: List[int] = field(
+        default_factory=lambda: [
+            33410730,  # Aan
+            6931060098,  # Basang Data
+        ]
+    )
+
     # ============================================================
     # Google Sheets Settings
     # ============================================================
     GOOGLE_CREDENTIALS_FILE: str = GOOGLE_CREDENTIALS_FILE
-    
+
     # Default spreadsheet for free tier users
     DEFAULT_SPREADSHEET_ID: str = SPREADSHEET_ID
-    
+
     # Default column headers for Google Sheets
-    DEFAULT_SHEET_COLUMNS: List[str] = field(default_factory=lambda: [
-        "waktu",
-        "penjual",
-        "barang",
-        "harga",
-        "jumlah",
-        "service",
-        "pajak",
-        "ppn",
-        "subtotal",
-        "User ID",
-        "Unix Timestamp",
-    ])
-    
+    DEFAULT_SHEET_COLUMNS: List[str] = field(
+        default_factory=lambda: [
+            "waktu",
+            "penjual",
+            "barang",
+            "harga",
+            "jumlah",
+            "service",
+            "pajak",
+            "ppn",
+            "subtotal",
+            "User ID",
+            "Unix Timestamp",
+        ]
+    )
+
     # ============================================================
     # AI API Settings (NanoGPT)
     # ============================================================
     # Legacy Chutes API (kept for reference)
     CHUTES_API_KEY: str = CHUTES_API_KEY
     CHUTES_API_URL: str = "https://llm.chutes.ai/v1/chat/completions"
-    
+
     # NanoGPT API (current provider)
     NANOGPT_API_KEY: str = NANOGPT_API_KEY
     NANOGPT_API_URL: str = "https://nano-gpt.com/api/v1/chat/completions"
-    
+
     # Vision model for invoice extraction (with fallbacks)
-    AI_MODEL: str = "qwen/qwen3.5-397b-a17b"
-    AI_MODEL_FALLBACKS: List[str] = field(default_factory=lambda: [
-        "qwen3-vl-235b-a22b-instruct-original",
-        "zai-org/glm-4.6v",
-        "qwen25-vl-72b-instruct",  # Smaller, tested working
-        "Qwen/Qwen3-VL-235B-A22B-Instruct",  # Alternative provider
-        "qwen3-vl-235b-a22b-thinking",  # Meta's vision model
-    ])
-    
+    AI_MODEL: str = "moonshotai/kimi-k2.6"
+    AI_MODEL_FALLBACKS: List[str] = field(
+        default_factory=lambda: [
+            "google/gemma-4-31b-it",
+            "xiaomi/mimo-v2.5",
+            "stepfun/step-3.7-flash:thinking",
+            "qwen3-vl-235b-a22b-instruct-original",
+            "zai-org/glm-4.6v",
+            "qwen25-vl-72b-instruct",  # Smaller, tested working
+            "Qwen/Qwen3-VL-235B-A22B-Instruct",  # Alternative provider
+            "qwen3-vl-235b-a22b-thinking",  # Meta's vision model
+        ]
+    )
+
     # Timeout settings (connect_timeout, read_timeout)
     AI_TIMEOUT: tuple = (60, 120)
-    
+
     # AI generation settings
     AI_TEMPERATURE: float = 0.1
     AI_MAX_TOKENS: int = 10000
-    
+
     # ============================================================
     # Database Settings
     # ============================================================
     DATABASE_PATH: str = os.path.join(os.path.dirname(__file__), "data.db")
     DATABASE_URL: str = field(default="")
-    
+
     def __post_init__(self):
         if not self.DATABASE_URL:
             self.DATABASE_URL = f"sqlite:///{self.DATABASE_PATH}"
-    
+
     # ============================================================
     # Tier System Settings
     # ============================================================
-    TIER_LIMITS: Dict[str, int] = field(default_factory=lambda: {
-        "free": 5,
-        "silver": 50,
-        "gold": 150,
-        "platinum": 300,
-        "admin": -1,  # -1 means unlimited
-    })
-    
+    TIER_LIMITS: Dict[str, int] = field(
+        default_factory=lambda: {
+            "free": 5,
+            "silver": 50,
+            "gold": 150,
+            "platinum": 300,
+            "admin": -1,  # -1 means unlimited
+        }
+    )
+
     # ============================================================
     # Timezone Settings
     # ============================================================
     # Timezone for daily quota reset (midnight in this timezone)
     TIMEZONE: str = "Asia/Jakarta"  # WIB (UTC+7)
-    
+
     # ============================================================
     # File Upload Settings
     # ============================================================
     UPLOAD_DIR: str = "uploads"
-    
+
     # Allowed file extensions
-    ALLOWED_IMAGE_EXTENSIONS: List[str] = field(default_factory=lambda: [
-        "png", "jpeg", "jpg", "webp", "heic", "heif"
-    ])
-    ALLOWED_DOCUMENT_EXTENSIONS: List[str] = field(default_factory=lambda: [
-        "pdf"
-    ])
-    
+    ALLOWED_IMAGE_EXTENSIONS: List[str] = field(
+        default_factory=lambda: ["png", "jpeg", "jpg", "webp", "heic", "heif"]
+    )
+    ALLOWED_DOCUMENT_EXTENSIONS: List[str] = field(default_factory=lambda: ["pdf"])
+
     # ============================================================
     # Helper Methods
     # ============================================================
-    
+
     def is_admin(self, telegram_id: int) -> bool:
         """Check if a user is an admin."""
         return telegram_id in self.ADMIN_USER_IDS
-    
+
     def get_tier_limit(self, tier: str) -> int:
         """Get daily limit for a tier."""
         return self.TIER_LIMITS.get(tier, 5)  # Default to free tier limit
