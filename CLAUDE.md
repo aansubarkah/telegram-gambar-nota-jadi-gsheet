@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Telegram bot that extracts invoice/receipt data from images, PDFs, and text messages using Vision AI (Qwen/Qwen3-VL-235B-A22B-Instruct via Chutes API), then saves the structured data to Google Sheets. The project is transitioning from a simple multi-user system to a tier-based subscription model with daily usage limits.
+A Telegram bot that extracts invoice/receipt data from images, PDFs, and text messages using Vision AI (Moonshotai/Kimi-K2.6 via NanoGPT API, with fallback models), then saves the structured data to Google Sheets. The bot runs on a VPS with a tier-based subscription model backed by SQLite database with daily usage limits.
 
 ## Running the Bot
 
-### Current Active Bot
+### Current Active Bot (VPS)
 ```bash
-python app_multi_users_qwen.py
+python app_with_database.py
 ```
 
 ### Testing Text Parsing
@@ -25,28 +25,32 @@ python simple_text_test.py
 - `app.py` - Original single-user version
 - `app_excelid.py` - ExcelID integration version
 - `app_multi_users.py` - Multi-user support (older)
-- `app_multi_users_qwen.py` - **Current production version** using Chutes API with Qwen/Qwen3-VL-235B-A22B-Instruct model
+- `app_multi_users_qwen.py` - Legacy production version (Chutes API + Qwen3-VL-235B)
+- `app_with_database.py` - **Current production version** (NanoGPT API + Kimi-K2.6, SQLite database, tier system)
 
 ### Configuration Files
 - `credentials.py` - Centralized credentials (gitignored)
-  - Required: `TELEGRAM_BOT_TOKEN`, `GOOGLE_CREDENTIALS_FILE`, `SPREADSHEET_ID`, `CHUTES_API_KEY`
-  - Optional: `SPREADSHEET_ID_RIZAL` for specific users
-- `credentials.json` - Google service account credentials (gitignored)
+  - Required: `TELEGRAM_BOT_TOKEN`, `GOOGLE_CREDENTIALS_FILE`, `SPREADSHEET_ID`, `NANOGPT_API_KEY`
+  - Optional: `CHUTES_API_KEY` (legacy), `SPREADSHEET_ID_RIZAL` for specific users
+- `config.py` - Centralized Config dataclass (tier limits, AI model, timeouts, file settings)
+- `credentials.json` / `credentials_vps.json` - Google service account credentials (gitignored)
 - `prompts.py` - AI prompts for invoice extraction
   - `DEFAULT_PROMPT` - For image/PDF processing
   - `TEXT_PROMPT` - For text message processing with special handling for multiple items
+- `init_database.py` - Database initialization script (creates tables)
 
 ### Core Processing Flow
 
 1. **User sends media** → Telegram bot receives update
 2. **File download** → Saved to `uploads/` directory (temporary)
-3. **AI Processing**:
-   - Images: Direct base64 encoding → Chutes API
-   - PDFs: Each page converted to PNG → base64 → Chutes API
-   - Text: Sent with TEXT_PROMPT → Chutes API
+3. **AI Processing** (NanoGPT API with retry + fallback):
+   - Images: Direct base64 encoding → NanoGPT API
+   - PDFs: Each page converted to PNG → base64 → NanoGPT API
+   - Text: Sent with TEXT_PROMPT → NanoGPT API
 4. **JSON Extraction**: Response parsed to extract structured data
 5. **Google Sheets**: Data appended with User ID and Unix Timestamp
-6. **Cleanup**: Temporary files deleted
+6. **Database**: Activity logged for quota tracking (tier-based daily limits)
+7. **Cleanup**: Temporary files deleted
 
 ### Data Structure (Invoice Fields)
 Each extracted invoice item contains:
@@ -64,36 +68,7 @@ Plus metadata:
 - User ID (Telegram user ID as string)
 - Unix Timestamp (epoch time)
 
-### Multi-User System
-Current implementation (hardcoded):
-```python
-self.IDS_SPREADSHEETS = {
-    '33410730': '1OwBzgxICijfhhZ2TttbouKhdSlDLFyHYixwd7Iwo-UU'
-}
-```
-
-**Planned migration**: Move to SQLite database with tier system (see TASKS.md and PRD.md)
-
-## Development Workflow
-
-### Planned Refactoring (See PLANNING.md and TASKS.md)
-The codebase is being restructured to support a tier-based system:
-
-1. **Database Layer** (`database/`):
-   - `models.py` - SQLAlchemy models (User, ActivityLog, Tier)
-   - `db.py` - Database connection and initialization
-   - `crud.py` - CRUD operations for users and activity logs
-
-2. **Bot Layer** (`bot/`):
-   - `handlers/commands.py` - Command handlers (/start, /usage, /settier, etc.)
-   - `handlers/media.py` - Photo/PDF/text processing handlers
-   - `services/ai_processor.py` - AI integration (Chutes API)
-   - `services/sheets.py` - Google Sheets operations
-
-3. **Configuration** (`config.py`):
-   - Centralized Config class with tier limits and admin settings
-
-### Tier System (Planned)
+### Tier System (Implemented in app_with_database.py)
 - **Free**: 5 requests/day, shared Google Sheet
 - **Silver**: 50 requests/day, personal Google Sheet
 - **Gold**: 150 requests/day, personal Google Sheet
@@ -101,6 +76,29 @@ The codebase is being restructured to support a tier-based system:
 - **Admin**: Unlimited, any Google Sheet
 
 Daily limits reset at midnight WIB (Asia/Jakarta timezone).
+
+Admin users (hardcoded in `config.py`): `33410730`, `6931060098`
+
+### AI Model Configuration (config.py)
+- **Primary**: `moonshotai/kimi-k2.6` (via NanoGPT API)
+- **Fallbacks** (tried in order on 503/500/429):
+  1. `google/gemma-4-31b-it`
+  2. `xiaomi/mimo-v2.5`
+  3. `stepfun/step-3.7-flash:thinking`
+  4. `qwen3-vl-235b-a22b-instruct-original`
+  5. `zai-org/glm-4.6v`
+  6. `qwen25-vl-72b-instruct`
+  7. `Qwen/Qwen3-VL-235B-A22B-Instruct`
+  8. `qwen3-vl-235b-a22b-thinking`
+- **API endpoint**: `https://nano-gpt.com/api/v1/chat/completions`
+- **Timeout**: 60s connect, 120s read
+- **Temperature**: 0.1, **Max tokens**: 10000
+
+### Database (SQLite)
+- Path: `data.db` (in project root)
+- Tables: User, ActivityLog, Tier
+- Managed via SQLAlchemy ORM
+- Initialized via `init_database.py`
 
 ## Important Implementation Details
 
@@ -116,7 +114,7 @@ The bot includes robust JSON extraction logic to handle:
 - Each PDF page is converted to PNG at 2x zoom (for quality)
 - All pages are processed sequentially
 - Results from all pages are combined into a single dataset
-- PDF counts as 1 request regardless of page count (planned quota system)
+- PDF counts as 1 request regardless of page count
 
 ### Text Message Processing
 Special handling for messages with multiple line items:
@@ -132,18 +130,11 @@ Special handling for messages with multiple line items:
 
 ### Error Handling
 - API timeout: 60s connect, 120s read (vision models are slow)
+- Retry with exponential backoff on 503/500/429 errors
+- Automatic model fallback chain (up to 9 models)
 - Graceful handling of malformed AI responses
 - Logging at INFO level for all operations
 - Cleanup of temporary files even on error
-
-## Migration Strategy
-
-When implementing the database-backed tier system:
-1. Keep `app_multi_users_qwen.py` as backup
-2. Build new modular structure alongside existing code
-3. Test thoroughly with SQLite database
-4. Migrate existing users from `IDS_SPREADSHEETS` to database
-5. Switch entry point when ready
 
 ## Testing Considerations
 
@@ -156,6 +147,7 @@ When implementing the database-backed tier system:
 - Google Sheets permission errors
 - Multiple items in single image/text
 - Messages with non-standard date formats
+- Model fallback chain exhaustion
 
 ### Service Account Setup
 All Google Sheets must grant Editor access to:
@@ -164,11 +156,11 @@ All Google Sheets must grant Editor access to:
 
 ## Current Project State
 
-**Status**: Transitioning from simple multi-user bot to tier-based subscription system
+**Status**: Tier-based subscription system with SQLite database is live on VPS
 
 **Active Files**:
-- Production: `app_multi_users_qwen.py`
-- Configuration: `credentials.py`, `prompts.py`
-- Planning: `PRD.md`, `PLANNING.md`, `TASKS.md`, `SCRATCHPAD.md`
-
-**Next Steps**: See TASKS.md Milestone 1 (Database Foundation)
+- Production (VPS): `app_with_database.py`
+- Configuration: `config.py`, `credentials.py`, `prompts.py`
+- Database: `init_database.py`, `data.db`
+- Legacy: `app_multi_users_qwen.py` (backup)
+- Planning: `PRD.md`, `PLANNING.md`, `TASKS.md`, `SCRATCHPAD.md`, `MIGRATION_GUIDE.md`

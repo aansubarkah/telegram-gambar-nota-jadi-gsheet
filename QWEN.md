@@ -2,86 +2,88 @@
 
 ## Project Overview
 
-This project is a Telegram bot that integrates with Google Sheets and Google's Gemini AI. Its primary function is to allow users to send images of receipts or invoices to a Telegram bot. The bot then uses the Gemini API to extract structured data (like date, seller, items, prices) from the image and automatically saves this information to a Google Spreadsheet.
+A Telegram bot that extracts invoice/receipt data from images, PDFs, and text messages using Vision AI (Moonshotai/Kimi-K2.6 via NanoGPT API), then saves structured data to Google Sheets. Backed by SQLite database with a tier-based subscription model and daily usage limits. Runs on a VPS.
 
 ### Key Technologies
 
-* **Python**: The core programming language.
-* **python-telegram-bot**: For building and running the Telegram bot.
-* **gspread**: For interacting with Google Sheets.
-* **google-generativeai (Google Gen AI SDK)**: For calling the Gemini API to analyze images.
-* **Pydantic**: For defining data models and parsing the AI's JSON response.
-* **pandas**: For handling data processing (though usage appears limited in the current code).
-* **Google Cloud Service Account**: For authenticating with Google Sheets and Gemini APIs.
+* **Python**: Core programming language
+* **python-telegram-bot**: Telegram bot framework
+* **gspread**: Google Sheets integration
+* **httpx**: HTTP client for NanoGPT API calls (with retry + fallback)
+* **SQLAlchemy**: SQLite ORM for user management and quota tracking
+* **PyMuPDF (fitz)**: PDF to PNG conversion
+* **Google Cloud Service Account**: Google Sheets API authentication
 
 ### Architecture
 
-1.  A Telegram bot listens for incoming messages (text, photos, documents).
-2.  When a user sends an image or PDF, it's downloaded temporarily.
-3.  The image/PDF is sent to the Gemini `gemini-2.0-flash-lite` model with a specific prompt (`DEFAULT_PROMPT` in `prompts.py`) asking it to extract receipt data in a structured JSON format.
-4.  The AI's JSON response is parsed into a list of `Invoice` objects (defined using Pydantic).
-5.  The extracted data is formatted and appended as new rows to a predefined Google Sheet.
-6.  The user receives a confirmation message in Telegram with a summary of the extracted data.
+1. Telegram bot listens for incoming messages (text, photos, documents).
+2. User sends image/PDF/text → downloaded to `uploads/` directory (temporary).
+3. Media sent to NanoGPT API with `DEFAULT_PROMPT` or `TEXT_PROMPT` asking for structured JSON.
+4. AI response parsed into invoice data (waktu, penjual, barang, harga, jumlah, service, pajak, ppn, subtotal).
+5. Data appended to user's Google Sheet as new rows.
+6. Activity logged to SQLite database for daily quota tracking.
+7. User receives Telegram confirmation with extracted data summary.
+8. Temporary files cleaned up.
 
-## Development Environment & Running
+## AI Model Configuration
 
-### Prerequisites
+- **Provider**: NanoGPT API (`https://nano-gpt.com/api/v1/chat/completions`)
+- **Primary model**: `moonshotai/kimi-k2.6`
+- **Fallbacks** (tried in order on 503/500/429):
+  1. `google/gemma-4-31b-it`
+  2. `xiaomi/mimo-v2.5`
+  3. `stepfun/step-3.7-flash:thinking`
+  4. `qwen3-vl-235b-a22b-instruct-original`
+  5. `zai-org/glm-4.6v`
+  6. `qwen25-vl-72b-instruct`
+  7. `Qwen/Qwen3-VL-235B-A22B-Instruct`
+  8. `qwen3-vl-235b-a22b-thinking`
+- **Legacy provider**: Chutes API (`llm.chutes.ai`) — kept for reference only
+- **Timeout**: 60s connect, 120s read
+- **Temperature**: 0.1, **Max tokens**: 10000
 
-1.  **Python**: Ensure Python 3.9+ is installed.
-2.  **Virtual Environment (Recommended)**: Use a virtual environment to manage dependencies.
-3.  **Dependencies**: Install required packages from `requirements.txt` (though this file seems to contain a very large list, possibly from an Anaconda environment, rather than just project-specific deps).
-4.  **Credentials**:
-    *   A Telegram Bot Token (obtained via BotFather).
-    *   A Google Cloud Project with:
-        *   The Google Sheets API and Google Drive API enabled.
-        *   A Service Account with a JSON key file (`credentials.json`).
-        *   The Service Account granted "Editor" access to the target Google Spreadsheet.
-    *   A Google AI (Gemini) API key.
+## Running the Bot
 
-### Configuration
-
-Configuration is handled via `credentials.py`. You must set the following variables:
-
-*   `TELEGRAM_BOT_TOKEN`: Your Telegram bot's API token.
-*   `GOOGLE_CREDENTIALS_FILE`: Path to your Google Service Account JSON key file (e.g., `"credentials.json"`).
-*   `SPREADSHEET_ID`: The unique ID of the Google Spreadsheet where data will be saved (found in the spreadsheet's URL).
-*   `GEMINI_API_KEY`: Your Google AI (Gemini) API key.
-
-Example `credentials.py`:
-```python
-TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN_HERE"
-GOOGLE_CREDENTIALS_FILE = "path/to/your/credentials.json"
-SPREADSHEET_ID = "your_google_spreadsheet_id_here"
-GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE"
+### Production (VPS)
+```bash
+python app_with_database.py
 ```
 
-### Running the Bot
+### Testing
+```bash
+python test_text_parsing.py
+python simple_text_test.py
+```
 
-1.  Ensure your `credentials.py` is configured correctly.
-2.  Install dependencies (you might want to create a minimal `requirements.txt` first, or use the existing one if appropriate):
-    ```bash
-    pip install -r requirements.txt
-    ```
-    *(Note: The current `requirements.txt` is very large. A minimal list would likely include `python-telegram-bot`, `gspread`, `google-generativeai`, `pandas`, `pydantic`)*
-3.  Run the main application script:
-    ```bash
-    python app.py
-    ```
-    The bot should start and begin listening for messages on Telegram.
+## Key Files
 
-### Key Files
+| File | Purpose |
+|---|---|
+| `app_with_database.py` | **Production bot** — VPS entrypoint |
+| `config.py` | All config (AI model, tiers, timeouts, admin IDs) |
+| `credentials.py` | Secrets (gitignored) — API keys, tokens |
+| `prompts.py` | AI prompts for image and text extraction |
+| `init_database.py` | Creates SQLite tables |
+| `data.db` | SQLite database (gitignored) |
+| `app_multi_users_qwen.py` | Legacy bot (backup, Chutes API) |
 
-*   `app.py`: The main application file containing the bot logic, Google Sheets setup, and message handlers.
-*   `prompts.py`: Contains the `DEFAULT_PROMPT` used to instruct the Gemini AI on how to extract data from the image.
-*   `credentials.py`: Stores sensitive configuration like API keys and file paths (ensure this is kept secret and not committed if public).
-*   `requirements.txt`: Lists project dependencies (though currently very extensive).
-*   `uploads/`: A directory created at runtime to temporarily store downloaded images/documents.
+## Tier System
+
+| Tier | Daily Limit | Sheet |
+|---|---|---|
+| Free | 5 | Shared |
+| Silver | 50 | Personal |
+| Gold | 150 | Personal |
+| Platinum | 300 | Personal |
+| Admin | Unlimited | Any |
+
+Daily limits reset at midnight WIB (Asia/Jakarta).
 
 ## Development Conventions
 
-*   **Logging**: Uses Python's standard `logging` module for tracking events and errors.
-*   **Error Handling**: Includes `try...except` blocks around critical operations like API calls and file processing to catch and log errors gracefully.
-*   **Asynchronous Programming**: Leverages `async`/`await` for Telegram bot handlers to handle multiple users concurrently.
-*   **Object-Oriented Design**: Core bot functionality is encapsulated within the `TelegramGoogleSheetsBot` class.
-*   **Data Modeling**: Uses Pydantic `BaseModel` (`Invoice`) to define the expected structure of data returned by the AI.
-*   **Hardcoded Model**: The AI model `gemini-2.0-flash-lite` is hardcoded in `app.py`.
+* **Logging**: Python `logging` module at INFO level
+* **Error Handling**: `try...except` around all API calls, file ops, DB ops
+* **Async**: `async`/`await` for all Telegram bot handlers
+* **Single-file monolith**: `app_with_database.py` contains all bot logic inline
+* **Config centralization**: All tuneable settings in `config.py`
+* **Auto-registration**: New users created in SQLite on first interaction
