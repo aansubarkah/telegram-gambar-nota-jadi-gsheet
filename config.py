@@ -80,6 +80,7 @@ class Config:
             "xiaomi/mimo-v2.5",
             "google/gemma-4-31b-it",
             "stepfun/step-3.7-flash:thinking",
+            "google/gemma-4-31b-it",
             "qwen3-vl-235b-a22b-instruct-original",
             "zai-org/glm-4.6v",
             "qwen25-vl-72b-instruct",  # Smaller, tested working
