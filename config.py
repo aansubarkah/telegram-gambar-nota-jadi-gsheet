@@ -77,8 +77,8 @@ class Config:
     AI_MODEL: str = "moonshotai/kimi-k2.6"
     AI_MODEL_FALLBACKS: List[str] = field(
         default_factory=lambda: [
-            "google/gemma-4-31b-it",
             "xiaomi/mimo-v2.5",
+            "google/gemma-4-31b-it",
             "stepfun/step-3.7-flash:thinking",
             "qwen3-vl-235b-a22b-instruct-original",
             "zai-org/glm-4.6v",
